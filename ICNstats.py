@@ -18,7 +18,7 @@ log = logging.getLogger('ICNstats')
 class Config:
     class Default:
         # [Data]
-        data_source = []
+        data_source = ''
         prediction_target = 'avg_soiltemp_4in_sod' # Name of the column that we are going to try to predict
         validation_percent = 0.2 # Percentage of training set to use as validation
         numeric_cols = ['year', 'month', 'day', 'max_wind_gust', 'avg_wind_speed', 'avg_wind_dir', 'sol_rad', 'max_air_temp', 'min_air_temp', 'avg_air_temp', 'max_rel_hum', 'min_rel_hum', 'avg_rel_hum', 'avg_dewpt_temp', 'precip', 'pot_evapot', 'max_soiltemp_4in_sod', 'min_soiltemp_4in_sod', 'avg_soiltemp_4in_sod', 'max_soiltemp_8in_sod', 'min_soiltemp_8in_sod', 'avg_soiltemp_8in_sod', 'max_soiltemp_4in_bare', 'min_soiltemp_4in_bare', 'avg_soiltemp_4in_bare', 'max_soiltemp_2in_bare', 'min_soiltemp_2in_bare', 'avg_soiltemp_2in_bare', 'SM5', 'SM10', 'SM20', 'SM50', 'SM100', 'SM150']
