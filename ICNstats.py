@@ -6,27 +6,23 @@ import configparser
 import json
 import numpy as np
 import pandas as pd
-#import statsmodels.api as sm
 import matplotlib.pyplot as plt
 
-#import tensorflow as tf
-#from tensorflow import keras
-#from tensorflow.python.keras import layers
-
 from tqdm import tqdm
+from dateutil import parser
 from datetime import datetime
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 
 log = logging.getLogger('ICNstats')
 
-numeric_cols = ['year', 'month', 'day', 'max_wind_gust', 'avg_wind_speed', 'avg_wind_dir', 'sol_rad', 'max_air_temp', 'min_air_temp', 'avg_air_temp', 'max_rel_hum', 'min_rel_hum', 'avg_rel_hum', 'avg_dewpt_temp', 'precip', 'pot_evapot', 'max_soiltemp_4in_sod', 'min_soiltemp_4in_sod', 'avg_soiltemp_4in_sod', 'max_soiltemp_8in_sod', 'min_soiltemp_8in_sod', 'avg_soiltemp_8in_sod', 'max_soiltemp_4in_bare', 'min_soiltemp_4in_bare', 'avg_soiltemp_4in_bare', 'max_soiltemp_2in_bare', 'min_soiltemp_2in_bare', 'avg_soiltemp_2in_bare', 'SM5', 'SM10', 'SM20', 'SM50', 'SM100', 'SM150']
-
 class Config:
     class Default:
         # [Data]
-        data_source = ''
+        data_source = []
         prediction_target = 'avg_soiltemp_4in_sod' # Name of the column that we are going to try to predict
         validation_percent = 0.2 # Percentage of training set to use as validation
+        numeric_cols = ['year', 'month', 'day', 'max_wind_gust', 'avg_wind_speed', 'avg_wind_dir', 'sol_rad', 'max_air_temp', 'min_air_temp', 'avg_air_temp', 'max_rel_hum', 'min_rel_hum', 'avg_rel_hum', 'avg_dewpt_temp', 'precip', 'pot_evapot', 'max_soiltemp_4in_sod', 'min_soiltemp_4in_sod', 'avg_soiltemp_4in_sod', 'max_soiltemp_8in_sod', 'min_soiltemp_8in_sod', 'avg_soiltemp_8in_sod', 'max_soiltemp_4in_bare', 'min_soiltemp_4in_bare', 'avg_soiltemp_4in_bare', 'max_soiltemp_2in_bare', 'min_soiltemp_2in_bare', 'avg_soiltemp_2in_bare', 'SM5', 'SM10', 'SM20', 'SM50', 'SM100', 'SM150']
+        error_cols = ['xwser', 'awser', 'awder', 'soler', 'xater', 'nater', 'aater', 'xrher', 'nrher', 'arher', 'adper', 'pcer', 'pevaper', 'xst4soder', 'nst4soder', 'ast4soder', 'xst8soder', 'nst8soder', 'ast8soder', 'xst4bareer', 'nst4bareer', 'ast4bareer', 'xst2bareer', 'nst2bareer', 'ast2bareer']
 
         # [Training]
         epochs = 5          # Number of training epochs
@@ -36,7 +32,8 @@ class Config:
         learning_rate = 1e-3 # learning rate
 
         # [Plots]
-        sample_year = 2018  # Year to sample for plots
+        sample_period_start = datetime(1900,1,1)
+        sample_period_end = datetime(2100,1,1)
         acf_days = 14       # Amount of days to forecast out for the ACF PACF plots
 
         # [Other]
@@ -45,15 +42,19 @@ class Config:
 
         @staticmethod
         def write(file):
-            content = ("# This is the configuration file for ICNstats.py.\n" +
+            content = ("# This is the configuration file for simple_rnn.py.\n" +
                        "\n" +
                        "[Data]\n" +
                        "# The directory or files to load the data from\n" +
-                       "data_source = ['example.csv','other_example.txt','example_dir']\n"
+                       "data_source = ['example.csv','other_example.txt','example_dir']"
                        "# Name of the column that is going to be predicted\n" +
                        "prediction_target = \'{}\'\n".format(Config.Default.prediction_target) +
                        "# Percentage of the data to use for validation\n" +
                        "validation_percent = {}\n".format(Config.Default.validation_percent) +
+                       "# The columns that will be used for analysis\n" +
+                       "numeric_cols = {}\n".format(Config.Default.numeric_cols) +
+                       "# The columns that will be used for flagig error data should contain a 'E' or 'M'\n" +
+                       "error_cols = {}\n".format(Config.Default.error_cols) +
                        "\n" +
                        "[Training]\n" +
                        "# Number of epochs to train for.\n" +
@@ -64,8 +65,10 @@ class Config:
                        "learning_rate = {}\n".format(Config.Default.learning_rate) + 
                        "\n" +
                        "[Plots]\n" +
-                       "# Year to sample for plots\n" +
-                       "sample_year = {}\n".format(Config.Default.sample_year) +
+                       "# Start Time of the sample period. Format is (Month/Day/Year Hour:Min:Sec)\n" +
+                       "sample_period_start = \'{}\'\n".format(Config.Default.sample_period_start.strftime('%m/%d/%y %H:%M:%S')) +
+                       "# End Time of the sample period\n" +
+                       "sample_period_end = \'{}\'\n".format(Config.Default.sample_period_end.strftime('%m/%d/%y %H:%M:%S')) +
                        "# Amount of days to plot out for the ACF plots\n" +
                        "acf_days = {}\n".format(Config.Default.acf_days) +
                        "\n" +
@@ -97,6 +100,8 @@ class Config:
         self.data_source = config.get('Data','data_source', fallback=Config.Default.data_source)
         self.prediction_target = config.get('Data','prediction_target', fallback=Config.Default.prediction_target)
         self.validation_percent = config.get('Data','validation_percent', fallback=Config.Default.validation_percent)
+        self.numeric_cols = config.get('Data','numeric_cols', fallback=Config.Default.numeric_cols)
+        self.error_cols = config.get('Data', 'error_cols', fallback=Config.Default.error_cols)
 
         # [Training]
         self.epochs = config.get('Training','epochs', fallback=Config.Default.epochs)
@@ -106,7 +111,8 @@ class Config:
         self.learning_rate = config.get('Training','learning_rate', fallback=Config.Default.learning_rate)
 
         # [Plots]
-        self.sample_year = config.get('Plots', 'sample_year', fallback=Config.Default.sample_year)
+        self.sample_period_start = config.get('Plots', 'sample_period_start', fallback=Config.Default.sample_period_start)
+        self.sample_period_end = config.get('Plots', 'sample_period_end', fallback=Config.Default.sample_period_end)
         self.acf_days = config.get('Plots', 'acf_days', fallback=Config.Default.acf_days)
 
         # [Other]
@@ -114,18 +120,24 @@ class Config:
         self.save_path = config.get('Other','save_path', fallback=Config.Default.save_path)
 
     def validate(self):
-        # Trim quotes and convert to list if needed
-        if self.data_source == '':
-            log.critical('No data source was given. Cannot run without any data')
-            exit(1)
-        if '[' in self.data_source:
-            self.data_source = json.loads(self.data_source.replace('\'', '"'))
-            self.data_source = [f.replace('"','') for f in self.data_source]
-        else:
-            self.data_source = self.data_source.replace('\'', '').replace('"', '')
+        def trim_quotes(val):
+            if type(val) is not list:
+                if '[' in val:
+                    val = json.loads(val.replace('\'', '"'))
+                    val = [i.replace('"','') for i in val]
+                else:
+                    val = val.replace('\'', '').replace('"', '')
+            return val
+        
+        # Convert strings to list if needed for list values
+        self.data_source = trim_quotes(self.data_source)
+        self.numeric_cols = trim_quotes(self.numeric_cols)
+        self.error_cols = trim_quotes(self.error_cols)
+        
+        # Trim quotes from string values
         self.prediction_target = self.prediction_target.replace('\'', '').replace('"', '')
         self.save_path = self.save_path.replace('\'', '').replace('"', '')
-
+        
         # Convert strings to numeric values
         self.validation_percent = float(self.validation_percent)
 
@@ -135,8 +147,14 @@ class Config:
         self.validation_batchs = int(self.validation_batchs)
         self.learning_rate = float(self.learning_rate)
 
-        self.sample_year = int(self.sample_year)
+        
         self.acf_days = int(self.acf_days)
+
+        # Convert sample period to datetime object
+        if type(self.sample_period_start) is not datetime:
+            self.sample_period_start = parser.parse(self.sample_period_start)
+        if type(self.sample_period_end) is not datetime:
+            self.sample_period_end = parser.parse(self.sample_period_end)
 
         # Convert debugLevel string to logging enum
         if hasattr(logging, self.debug_level.upper()):
@@ -173,14 +191,12 @@ def set_log_level(loglvl):
         h.setLevel(loglvl)
     log.setLevel(loglvl)
 
-def ingest_txt_file(file, keep_estimated=False):
+def ingest_txt_file(file, error_cols=[], keep_estimated=False):
     logging.info("Ingesting Data Files")
-    error_cols = ['xwser', 'awser', 'awder', 'soler', 'xater', 'nater', 'aater', 'xrher', 'nrher', 'arher', 'adper', 'pcer', 'pevaper', 'xst4soder', 'nst4soder', 'ast4soder', 'xst8soder', 'nst8soder', 'ast8soder', 'xst4bareer', 'nst4bareer', 'ast4bareer', 'xst2bareer', 'nst2bareer', 'ast2bareer']
-
+    
     # Read data files
     data = pd.DataFrame()
     
-    log.debug('Reading {}'.format(file))
     df = pd.read_csv(file, sep='\t')
 
     # Remove ICN footer
@@ -219,7 +235,7 @@ def ingest_txt_file(file, keep_estimated=False):
 
     return data, dropped_footer, dropped_null, dropped_missing, dropped_estimated
 
-def load_data(filepath, val_percent):
+def load_data(filepath, numeric_cols, error_cols=[]):
     # If its a single string change it to a list
     if isinstance(filepath, str):
         filepath = [filepath]
@@ -246,7 +262,7 @@ def load_data(filepath, val_percent):
     for file in tqdm(filepath):
         name, ext = os.path.splitext(file)
         if ext == '.txt':
-            file_data, log_df, log_dn, log_dm, log_de = ingest_txt_file(file)
+            file_data, log_df, log_dn, log_dm, log_de = ingest_txt_file(file, error_cols=error_cols)
             data = pd.concat([data, file_data])
             dropped_footer += log_df
             dropped_null += log_dn
@@ -259,21 +275,20 @@ def load_data(filepath, val_percent):
             log.warning('Unable to load {}, unknown extension "{}". Only .txt and .csv are supported'.format(file, ext))
     
     # Convert string values to numeric
-    data = data[numeric_cols].apply(pd.to_numeric, downcast='float', errors='coerce')
+    converted_data = data[numeric_cols].apply(pd.to_numeric, downcast='float', errors='coerce')
+    
+    # Keep site string
+    converted_data['site'] = data['site']
+    converted_data['timestamp'] = converted_data.apply(lambda x: datetime(int(x['year']),int(x['month']),int(x['day'])), axis=1)
 
-    # Split into Train and Validation sets
-    thresh = round(len(data)*val_percent)
-    train = data[:thresh]
-    val = data[thresh:]
-
-    log.info('Finished loading data\n\tTrain data {} samples\n\tVal data {} samples'.format(len(train), len(val)))  
+    log.info('Finished loading data with {} samples present'.format(len(data)))  
     log.info('Dropped {} missing values, {} estimated values, {} null values, and {} footer rows'.format(dropped_missing, dropped_estimated, dropped_null, dropped_footer))
 
-    return train, val
+    return converted_data
 
 def plot_corralation(df, savepath='Correlation.png'):
     f = plt.figure(figsize=(19, 19))
-    plt.matshow(df.corr(), fignum=f.number)
+    plt.matshow(df.corr(numeric_only=True), fignum=f.number)
     plt.xticks(range(df.select_dtypes(['number']).shape[1]), df.select_dtypes(['number']).columns, fontsize=14, rotation=45)
     plt.yticks(range(df.select_dtypes(['number']).shape[1]), df.select_dtypes(['number']).columns, fontsize=14)
     cb = plt.colorbar()
@@ -281,55 +296,57 @@ def plot_corralation(df, savepath='Correlation.png'):
     plt.title('Correlation Matrix', fontsize=16)
     plt.savefig(savepath)
 
-def data_analysis(data, config):
-    # Stats analaysis
-    log.info('Starting data analysis')
-    year_sample = data[data['year'] == config.sample_year]
-    year_sample.reset_index()
-
-    log.info('Creating stats csv')
-    # Write stats to a csv
-    statsdf = data.describe()
-    statsdf.to_csv(os.path.join(config.save_path, 'stats.csv'))
-
-    log.info('Plotting Corralation graph')
-    # Plot Corralation graph
-    if not os.path.exists(os.path.join(config.save_path, 'plots')):
-        os.makedirs(os.path.join(config.save_path, 'plots'))
-    plot_corralation(data, os.path.join(config.save_path, 'plots', 'Correlation.png'))
-
-    log.info('Creating ACF, PACF plots for each variable')
-    # Plot ACF, PACF for each column
-    
-    days=config.acf_days
-    for key in tqdm(numeric_cols):
-        if key in ['year','month','day']:
-            continue
-        # Orginal Series
-        fig, axes = plt.subplots(3,1, figsize=(20,14), sharex=True)
-        axes[0].plot(year_sample[key]); axes[0].set_title('Original Series, Year {}'.format(config.sample_year))
-        #plot_acf(year_sample[key], ax=axes[0,1], lags=days)
-
-        # 1st Differencing
-        axes[1].plot(year_sample[key].diff().dropna()); axes[1].set_title('1st Differential')
-        #plot_acf(year_sample[key].diff().dropna(), ax=axes[1,1], lags=days)
-
-        # 2nd Differencing
-        axes[2].plot(year_sample[key].diff().diff().dropna()); axes[2].set_title('2nd Differential')
-        #plot_acf(year_sample[key].diff().diff().dropna(), ax=axes[2,1], lags=days)
-
-        plt.savefig(os.path.join(config.save_path, 'plots', 'Diff_{}.png'.format(key)))
-        plt.close()
+def plot_diff(df, key, save_path, days=14):  
+    # Orginal Series
+    fig, axes = plt.subplots(3,1, figsize=(20,14), sharex=False)
+    for site in df['site'].unique():
+        site_df = df[df['site'] == site].copy()
+        axes[0].plot('timestamp', key, data=site_df, label=site)
         try:
-            acf_fig = plot_acf(year_sample[key], lags=days, title=('ACF'))
-            pacf_fig = plot_pacf(year_sample[key], method='ols', lags=days, title=('PACF'))
-            acf_fig.savefig(os.path.join(config.save_path, 'plots', 'ACF_{}.png'.format(key)))
-            pacf_fig.savefig(os.path.join(config.save_path, 'plots', 'PACF_{}.png'.format(key)))
+            plot_acf(site_df[key], ax=axes[1], lags=days, label=site)
         except:
-            log.warning('Could not generate ACF graph for {}'.format(key))
-            #log.exception("An error occured during variable {}".format(key))
+            log.error('Error generating ACF plot for {} at site {}'.format(key, site))
+        try:
+            plot_pacf(site_df[key], ax=axes[2], method='ols', lags=days, label=site)
+        except:
+            log.error('Error generating PACF plot for {} at site {}'.format(key, site))
+
+    axes[0].set_title('Original Series')
+    axes[0].grid(visible=True, axis='y')
+    axes[0].legend(title='Site', bbox_to_anchor=(1.02, 0.5), loc='upper left')
+    axes[1].legend(title='Site', bbox_to_anchor=(1.02, 0.5), loc='upper left')
+    axes[2].legend(title='Site', bbox_to_anchor=(1.02, 0.5), loc='upper left')
+    plt.savefig(save_path)
+    plt.close()
+
+def data_analysis(data, config):
+    log.info('Starting data analysis')
+    # Select only the sample period data.
+    sp_df = data[(data['timestamp'] >= config.sample_period_start) & (data['timestamp'] < config.sample_period_end)]
+
+    # Site specific analysis
+    for site in sp_df['site'].unique():
+        log.info('Analyzing site {}'.format(site))
+        site_df = sp_df[sp_df['site'] == site]
+
+        log.debug('Creating stats csv')
+        # Write stats to a csv
+        statsdf = site_df.describe()
+        statsdf.to_csv(os.path.join(config.save_path, '{}_stats.csv'.format(site)))
+
+        log.debug('Plotting Corralation graph')
+        # Plot Corralation graph
+        if not os.path.exists(os.path.join(config.save_path, 'plots')):
+            os.makedirs(os.path.join(config.save_path, 'plots'))
+        plot_corralation(site_df, os.path.join(config.save_path, 'plots', 'Corr_{}.png'.format(site)))
+
+    # Variable specfic analysis
+    log.info('Creating ACF, PACF plots for each variable')
+    for key in tqdm(config.numeric_cols):
+        if key in ['year','month','day','timestamp']:
             continue
-    
+        plot_diff(sp_df, key, os.path.join(config.save_path, 'plots', 'Diff_{}.png'.format(key)), days=config.acf_days)
+        
     log.info('Finished data analysis')
 
 def main():
@@ -343,11 +360,10 @@ def main():
         os.makedirs(config.save_path)
 
     # Load Dataset
-    train, val = load_data(config.data_source, (1-config.validation_percent))
+    data = load_data(config.data_source, config.numeric_cols, config.error_cols)
 
     # Pre model analysis
-    data_analysis(pd.concat([train,val]), config)
+    data_analysis(data, config)
     
-
 if __name__ == '__main__':
     main()
