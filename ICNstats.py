@@ -129,6 +129,11 @@ class Config:
                     val = val.replace('\'', '').replace('"', '')
             return val
         
+        # Required options check.
+        if self.data_source == '':
+             log.critical('No data source was given. Cannot run without any data')
+             exit(1)
+
         # Convert strings to list if needed for list values
         self.data_source = trim_quotes(self.data_source)
         self.numeric_cols = trim_quotes(self.numeric_cols)
