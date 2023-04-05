@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 import configparser
+import argparse
 
 import json
 import numpy as np
@@ -14,6 +15,13 @@ from datetime import datetime
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 
 log = logging.getLogger('ICNstats')
+
+def parse_command_line():
+    parser = argparse.ArgumentParser(description='')
+    parser.add_argument('-c', '--config', default='config.ini', action='store', help='Config file to load from')
+
+    args = parser.parse_args()
+    return args
 
 class Config:
     class Default:
@@ -42,11 +50,11 @@ class Config:
 
         @staticmethod
         def write(file):
-            content = ("# This is the configuration file for simple_rnn.py.\n" +
+            content = ("# This is the configuration file for ICNstats.py.\n" +
                        "\n" +
                        "[Data]\n" +
                        "# The directory or files to load the data from\n" +
-                       "data_source = ['example.csv','other_example.txt','example_dir']"
+                       "data_source = \n"
                        "# Name of the column that is going to be predicted\n" +
                        "prediction_target = \'{}\'\n".format(Config.Default.prediction_target) +
                        "# Percentage of the data to use for validation\n" +
@@ -66,9 +74,9 @@ class Config:
                        "\n" +
                        "[Plots]\n" +
                        "# Start Time of the sample period. Format is (Month/Day/Year Hour:Min:Sec)\n" +
-                       "sample_period_start = \'{}\'\n".format(Config.Default.sample_period_start.strftime('%m/%d/%y %H:%M:%S')) +
+                       "sample_period_start = \'{}\'\n".format(Config.Default.sample_period_start.strftime('%m/%d/%Y %H:%M:%S')) +
                        "# End Time of the sample period\n" +
-                       "sample_period_end = \'{}\'\n".format(Config.Default.sample_period_end.strftime('%m/%d/%y %H:%M:%S')) +
+                       "sample_period_end = \'{}\'\n".format(Config.Default.sample_period_end.strftime('%m/%d/%Y %H:%M:%S')) +
                        "# Amount of days to plot out for the ACF plots\n" +
                        "acf_days = {}\n".format(Config.Default.acf_days) +
                        "\n" +
@@ -279,12 +287,36 @@ def load_data(filepath, numeric_cols, error_cols=[]):
         else:
             log.warning('Unable to load {}, unknown extension "{}". Only .txt and .csv are supported'.format(file, ext))
     
-    # Convert string values to numeric
-    converted_data = data[numeric_cols].apply(pd.to_numeric, downcast='float', errors='coerce')
     
-    # Keep site string
+
+    # Convert string values to numeric
+    valid_cols = [col for col in numeric_cols if col in data]
+    invalid_cols = [col for col in numeric_cols if col not in data]
+    if len(invalid_cols) > 0:
+        log.warning('Numeric columns : {} were specified but not present in the data'.format(invalid_cols))
+    converted_data = data[valid_cols].apply(pd.to_numeric, downcast='float', errors='coerce')
+
+    # Check that there are any numeric columns
+    if len(valid_cols) < 1:
+        log.critical('No numeric columns were present in the data. No data to work with exiting now.')
+        exit(1)
+    
+    # Convert hourly null value (9999) to python null
+    if 'HDATE' in data:
+        converted_data[converted_data > 9001] = pd.NA
+
+    # Convert datetime format to timestamp column
+    if 'HDATE' in data: # Hourly data format
+        converted_data['timestamp'] = data.apply(lambda x: datetime.strptime(x['HDATE'],'%m/%d/%Y %H:%M'), axis=1)
+    elif 'year' in data and 'month' in data and 'day' in data: # Daily data format
+        converted_data['timestamp'] = data.apply(lambda x: datetime(int(x['year']),int(x['month']),int(x['day'])), axis=1)
+    else:
+        log.warning('No datetime format could be found in the data. (No HDATE or year month day combo)')
+
+    # Keep site tag
+    if 'station' in data: # Hourly data format
+        data['site'] = data['station']
     converted_data['site'] = data['site']
-    converted_data['timestamp'] = converted_data.apply(lambda x: datetime(int(x['year']),int(x['month']),int(x['day'])), axis=1)
 
     log.info('Finished loading data with {} samples present'.format(len(data)))  
     log.info('Dropped {} missing values, {} estimated values, {} null values, and {} footer rows'.format(dropped_missing, dropped_estimated, dropped_null, dropped_footer))
@@ -355,11 +387,13 @@ def data_analysis(data, config):
     log.info('Finished data analysis')
 
 def main():
+    args = parse_command_line()
+
     # Start logger
     setup_logger(os.path.join('logs', datetime.now().strftime('%d%m%Y_%H%M%S.log')), logging.DEBUG)
     
     # Load User Config
-    config = Config("config.ini")
+    config = Config(args.config)
     set_log_level(config.debug_level)
     if not os.path.exists(config.save_path):
         os.makedirs(config.save_path)
