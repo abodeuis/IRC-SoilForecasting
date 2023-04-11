@@ -21,7 +21,7 @@ from tqdm import tqdm
 import src.analysis as analysis
 from src.config import Config
 import src.dataloader as icn_data
-from src.models import LSTM_Model
+from src.models import LSTM_Model, RNN_Model, GRU_Model
 
 log = logging.getLogger('ICN-Forecasting')
 
@@ -89,6 +89,8 @@ def train(model, opt, loss_fn, train_dataloader, val_dataloader, config, tb):
                 val_err = np.sqrt(loss_fn(ŷ, y))
             #log.info('Epoch {}: Val error = {}'.format(epoch, val_err))
             tb.add_scalar('Loss', loss, epoch)
+            #tb.add_histogram('lstm.bias', model.lstm.bias, epoch)
+            #tb.add_histogram('lstm.weight', model.lstm.weight, epoch)
             #tb.add_scaler('Target Accuracy', np.sqrt(loss_fn()), epoch)
             pbar.set_description('Epoch {}: Train Error = {tr:.2f}, Val Error = {vr:.2f}'.format(epoch, tr=train_err, vr=val_err))
             #print('Epoch {}: Val error = {}'.format(epoch, val_err))
@@ -121,7 +123,7 @@ def main():
     data = icn_data.load_data(config.data_source, config.numeric_cols, config.error_cols)
 
     # Pre model analysis
-    analysis.data_analysis(data, config)
+    #analysis.data_analysis(data, config)
 
     # Split into Train and Validation sets
     # TODO better random sampling of the test and validation set.
@@ -136,19 +138,32 @@ def main():
     
     # linear regression
 
-    # RNN
-
-    # LSTM
-    log.debug('Creating model with data_shape of {}'.format(len(train_data[config.numeric_cols].keys())))
-    model = LSTM_Model(len(train_data[config.numeric_cols].keys()))
-    optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
-    loss = nn.MSELoss()
+    # Data Prep for NN
     train_loader = torch_data.DataLoader(torch_data.TensorDataset(train_x, train_y), shuffle=True, batch_size=config.batch_size)
     val_loader = torch_data.DataLoader(torch_data.TensorDataset(val_x, val_y), shuffle=True, batch_size=config.validation_batchs)
+    input_shape=len(train_data[config.numeric_cols].keys())
+    
+    # RNN
+    # Input shape = (seq_len, batch, input_size)
+    log.info('Running RNN Model')
+    rnn_model = RNN_Model(input_shape)
+    rnn_opt = optim.Adam(rnn_model.parameters(), lr=config.learning_rate)
+    loss = nn.MSELoss()
+    rnn_model = train(rnn_model, rnn_opt, loss, train_loader, val_loader, config, tb)
 
-    train(model, optimizer, loss, train_loader, val_loader, config, tb)
+    # LSTM
+    log.info('Running LSTM Model')
+    lstm_model = LSTM_Model(input_shape)
+    lstm_opt = optim.Adam(lstm_model.parameters(), lr=config.learning_rate)
+    loss = nn.MSELoss()
+    lstm_model = train(lstm_model, lstm_opt, loss, train_loader, val_loader, config, tb)
 
     # GRU
+    log.info('Running GRU Model')
+    gru_model = GRU_Model(input_shape)
+    gru_opt = optim.Adam(gru_model.parameters(), lr=config.learning_rate)
+    loss = nn.MSELoss()
+    gru_model = train(gru_model, gru_opt, loss, train_loader, val_loader, config, tb)
 
     # ARMA (Auto Regressive Moving Average) model
     #arima_model = sm.tsa.ARIMA(data, order=(1,1)).fit()
