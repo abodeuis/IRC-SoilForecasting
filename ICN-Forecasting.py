@@ -2,10 +2,12 @@ import os
 import sys
 import logging
 import argparse
+import pickle
 
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
+import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -61,8 +63,10 @@ def set_log_level(loglvl):
     log.setLevel(loglvl)
 
 def train(model, opt, loss_fn, train_dataloader, val_dataloader, config, tb):
+    log.info('Starting training of {}.'.format(model.model_name))
     best_model = ''
-    best_loss = np.Infinity
+    best_train_loss = np.Infinity
+    best_val_loss = np.Infinity
     es = 0
     val_err = 0
     pbar = tqdm(range(config.epochs))
@@ -86,24 +90,27 @@ def train(model, opt, loss_fn, train_dataloader, val_dataloader, config, tb):
             if epoch % 5 == 0:
                 x, y = next(iter(val_dataloader))
                 ŷ = model(x).squeeze()
-                val_err = np.sqrt(loss_fn(ŷ, y))
+                val_loss = loss_fn(ŷ, y)
+                val_err = np.sqrt(val_loss)
+                tb.add_scalar('{} : Val Loss'.format(model.model_name), val_loss, epoch)
             #log.info('Epoch {}: Val error = {}'.format(epoch, val_err))
-            tb.add_scalar('Loss', loss, epoch)
+            tb.add_scalar('{} : Train Loss'.format(model.model_name), loss, epoch)
             #tb.add_histogram('lstm.bias', model.lstm.bias, epoch)
             #tb.add_histogram('lstm.weight', model.lstm.weight, epoch)
             #tb.add_scaler('Target Accuracy', np.sqrt(loss_fn()), epoch)
             pbar.set_description('Epoch {}: Train Error = {tr:.2f}, Val Error = {vr:.2f}'.format(epoch, tr=train_err, vr=val_err))
             #print('Epoch {}: Val error = {}'.format(epoch, val_err))
         # Early Stopping
-        if train_err < best_loss:
-            best_loss = train_err
+        if train_err < best_train_loss:
+            best_train_loss = train_err
+            best_val_loss = val_err
             best_model = model
             es = 0
         if es > config.early_stopping:
-            log.info('Stopping early due to no improvement in loss in {} epochs'.format(config.early_stopping))
+            log.warning('Stopping {} training early due to no improvement in train loss in {} epochs'.format(model.model_name, config.early_stopping))
             break
         es = es + 1
-    
+    log.info('Training ended after {} epochs with train loss {tl:.2f}, val loss {vl:.2f}'.format(epoch, tl=best_train_loss, vl=best_val_loss))
     return best_model
 
 def main():
@@ -123,7 +130,7 @@ def main():
     data = icn_data.load_data(config.data_source, config.numeric_cols, config.error_cols)
 
     # Pre model analysis
-    #analysis.data_analysis(data, config)
+    analysis.data_analysis(data, config)
 
     # Split into Train and Validation sets
     # TODO better random sampling of the test and validation set.
@@ -142,28 +149,56 @@ def main():
     train_loader = torch_data.DataLoader(torch_data.TensorDataset(train_x, train_y), shuffle=True, batch_size=config.batch_size)
     val_loader = torch_data.DataLoader(torch_data.TensorDataset(val_x, val_y), shuffle=True, batch_size=config.validation_batchs)
     input_shape=len(train_data[config.numeric_cols].keys())
+    model_params = {
+        'input_dim' : len(train_data[config.numeric_cols].keys()),
+        'hidden_dim' : 50,
+        'output_dim' : 1,
+        'layers' : 1
+    }
     
     # RNN
     # Input shape = (seq_len, batch, input_size)
     log.info('Running RNN Model')
-    rnn_model = RNN_Model(input_shape)
+    rnn_model = RNN_Model(**model_params)
     rnn_opt = optim.Adam(rnn_model.parameters(), lr=config.learning_rate)
     loss = nn.MSELoss()
     rnn_model = train(rnn_model, rnn_opt, loss, train_loader, val_loader, config, tb)
 
     # LSTM
     log.info('Running LSTM Model')
-    lstm_model = LSTM_Model(input_shape)
+    lstm_model = LSTM_Model(**model_params)
     lstm_opt = optim.Adam(lstm_model.parameters(), lr=config.learning_rate)
     loss = nn.MSELoss()
     lstm_model = train(lstm_model, lstm_opt, loss, train_loader, val_loader, config, tb)
 
     # GRU
     log.info('Running GRU Model')
-    gru_model = GRU_Model(input_shape)
+    gru_model = GRU_Model(**model_params)
     gru_opt = optim.Adam(gru_model.parameters(), lr=config.learning_rate)
     loss = nn.MSELoss()
     gru_model = train(gru_model, gru_opt, loss, train_loader, val_loader, config, tb)
+
+    # Predictions
+    log.info('Generating prediction comparsion plots')
+    predict = {}
+    predict_x, predict_y = next(iter(val_loader))
+    predict['Orginal Series'] = predict_y[0]
+    with torch.no_grad():
+        predict['RNN'] = rnn_model(predict_x[0]).squeeze()
+        predict['LSTM'] = lstm_model(predict_x[0]).squeeze()
+        predict['GRU'] = gru_model(predict_x[0]).squeeze()
+
+    fig, ax = analysis.plot_predictions(predict)
+    fig.savefig(os.path.join(config.save_path, 'predict.png'))
+    fig, ax = analysis.plot_error(predict)
+    fig.savefig(os.path.join(config.save_path, 'error.png'))
+    
+    # Saving Models
+    log.info('Saving Models')
+    os.makedirs(os.path.join(config.save_path, 'models'))
+    torch.save(rnn_model, os.path.join(config.save_path, 'models', 'RNN_model.pk'))
+    torch.save(lstm_model, os.path.join(config.save_path, 'models', 'LSTM_model.pk'))
+    torch.save(gru_model, os.path.join(config.save_path, 'models', 'GRU_model.pk'))
 
     # ARMA (Auto Regressive Moving Average) model
     #arima_model = sm.tsa.ARIMA(data, order=(1,1)).fit()

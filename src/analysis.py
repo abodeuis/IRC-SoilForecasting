@@ -81,3 +81,20 @@ def data_analysis(data, config):
         plot_diff(sp_df, key, os.path.join(config.save_path, 'plots', 'Diff_{}.png'.format(key)), days=config.acf_days)
         
     log.info('Finished data analysis')
+
+def plot_predictions(pre_dict):
+    fig, ax = plt.subplots(figsize=(14,8))
+    for key in pre_dict:
+        ax.plot(pre_dict[key], label=key)
+    ax.legend(bbox_to_anchor=(1.02, 0.5), loc='upper left')
+    return fig, ax
+
+def plot_error(pre_dict):
+    fig, ax = plt.subplots(figsize=(14,8))
+    for key in pre_dict:
+        if key == 'Orginal Series':
+            continue
+        error = [abs(org - pre) for org, pre in zip(pre_dict['Orginal Series'], pre_dict[key])]
+        ax.plot(error, label=key)
+    ax.legend(bbox_to_anchor=(1.02, 0.5), loc='upper left')
+    return fig, ax
