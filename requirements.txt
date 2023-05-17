@@ -4,3 +4,4 @@ tqdm
 statsmodels
 matplotlib
 tensorboard
+torch

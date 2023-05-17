@@ -2,7 +2,6 @@ import os
 import sys
 import logging
 import argparse
-import pickle
 
 import numpy as np
 import pandas as pd
@@ -20,6 +19,7 @@ from datetime import datetime
 from tqdm import tqdm
 
 # Internal Project files
+import src.logging_utils as log_utils
 import src.analysis as analysis
 from src.config import Config
 import src.dataloader as icn_data
@@ -33,34 +33,6 @@ def parse_command_line():
 
     args = parser.parse_args()
     return args
-
-def setup_logger(filepath, debuglvl):
-    # Create directory if necessary
-    if not os.path.exists(os.path.dirname(filepath)):
-        os.makedirs(os.path.dirname(filepath))
-
-    # Create Formatter
-    log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(filename)s:(%(lineno)d) - %(message)s', datefmt='%d/%m/%Y %H:%M:%S')
-
-    # Setup File handler
-    file_handler = logging.FileHandler(filepath)
-    file_handler.setFormatter(log_formatter)
-    file_handler.setLevel(debuglvl)
-
-    # Setup Stream handler (i.e. console)
-    stream_handler = logging.StreamHandler(stream=sys.stdout)
-    stream_handler.setFormatter(log_formatter)
-    stream_handler.setLevel(debuglvl)
-
-    # Add Handlers to logger
-    log.addHandler(file_handler)
-    log.addHandler(stream_handler)
-    log.setLevel(debuglvl)
-
-def set_log_level(loglvl):
-    for h in log.handlers:
-        h.setLevel(loglvl)
-    log.setLevel(loglvl)
 
 def train(model, opt, loss_fn, train_dataloader, val_dataloader, config, tb):
     log.info('Starting training of {}.'.format(model.model_name))
@@ -117,15 +89,18 @@ def main():
     args = parse_command_line()
 
     # Start logger
-    setup_logger(os.path.join('logs', datetime.now().strftime('%d%m%Y_%H%M%S.log')), logging.DEBUG)
-    tb = SummaryWriter()
+    log_utils.setup_logger('Latest.log', logging.DEBUG)
 
     # Load User Config
     config = Config(args.config)
-    set_log_level(config.debug_level)
-    if not os.path.exists(config.save_path):
-        os.makedirs(config.save_path)
 
+    if config.save_path != '' and not os.path.exists(os.path.join(config.save_path, 'logs')):
+        os.makedirs(os.path.join(config.save_path, 'logs'))
+    log_utils.set_log_file(os.path.join(config.save_path, 'logs', 'training.log'))
+    log_utils.set_log_level(config.debug_level)
+    # TensorBoard Logger
+    tb = SummaryWriter(os.path.join(config.save_path, 'logs'))
+    
     # Load Dataset
     data = icn_data.load_data(config.data_source, config.numeric_cols, config.error_cols)
 
@@ -195,7 +170,8 @@ def main():
     
     # Saving Models
     log.info('Saving Models')
-    os.makedirs(os.path.join(config.save_path, 'models'))
+    if not os.path.exists(os.path.join(config.save_path, 'models')):
+        os.makedirs(os.path.join(config.save_path, 'models'))
     torch.save(rnn_model, os.path.join(config.save_path, 'models', 'RNN_model.pk'))
     torch.save(lstm_model, os.path.join(config.save_path, 'models', 'LSTM_model.pk'))
     torch.save(gru_model, os.path.join(config.save_path, 'models', 'GRU_model.pk'))
