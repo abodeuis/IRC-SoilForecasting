@@ -18,6 +18,8 @@ class Config:
         error_cols = ['xwser', 'awser', 'awder', 'soler', 'xater', 'nater', 'aater', 'xrher', 'nrher', 'arher', 'adper', 'pcer', 'pevaper', 'xst4soder', 'nst4soder', 'ast4soder', 'xst8soder', 'nst8soder', 'ast8soder', 'xst4bareer', 'nst4bareer', 'ast4bareer', 'xst2bareer', 'nst2bareer', 'ast2bareer']
 
         # [Training]
+        training_frame_size = 14    # Number of time steps to use for each training step window
+        prediction_frame_size = 7   # Number of time steps to predict out.
         epochs = 5          # Number of training epochs
         batch_size = 32     # Number of individual samples to use for each training step.
         early_stopping = 3  # Early stopping, will stop training if no improvement in 'N' epochs
@@ -97,6 +99,8 @@ class Config:
         self.error_cols = config.get('Data', 'error_cols', fallback=Config.Default.error_cols)
 
         # [Training]
+        self.training_frame_size = config.get('Training','training_frame_size', fallback=Config.Default.training_frame_size)
+        self.prediction_frame_size = config.get('Training','prediction_frame_size', fallback=Config.Default.prediction_frame_size)
         self.epochs = config.get('Training','epochs', fallback=Config.Default.epochs)
         self.batch_size = config.get('Training','batch_size', fallback=Config.Default.batch_size)
         self.early_stopping = config.get('Training','early_stopping', fallback=Config.Default.early_stopping)
@@ -141,6 +145,8 @@ class Config:
         # Convert strings to numeric values
         self.validation_percent = float(self.validation_percent)
 
+        self.training_frame_size = int(self.training_frame_size)
+        self.prediction_frame_size = int(self.prediction_frame_size)
         self.epochs = int(self.epochs)
         self.batch_size = int(self.batch_size)
         self.early_stopping = int(self.early_stopping)

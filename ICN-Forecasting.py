@@ -105,7 +105,7 @@ def main():
     data = icn_data.load_data(config.data_source, config.numeric_cols, config.error_cols)
 
     # Pre model analysis
-    analysis.data_analysis(data, config)
+    #analysis.data_analysis(data, config)
 
     # Split into Train and Validation sets
     # TODO better random sampling of the test and validation set.
@@ -113,8 +113,8 @@ def main():
     train_data = data[:thresh]
     val_data = data[thresh:]
 
-    train_x, train_y = icn_data.create_dataset(train_data[config.numeric_cols], config.prediction_target, 28)
-    val_x, val_y = icn_data.create_dataset(val_data[config.numeric_cols], config.prediction_target, 28)
+    train_x, train_y = icn_data.create_dataset(train_data[config.numeric_cols], config.prediction_target, config.training_frame_size, config.prediction_frame_size)
+    val_x, val_y = icn_data.create_dataset(val_data[config.numeric_cols], config.prediction_target, config.training_frame_size, config.prediction_frame_size)
 
     # Naive Model (Guess last years answer)
     
@@ -127,7 +127,7 @@ def main():
     model_params = {
         'input_dim' : len(train_data[config.numeric_cols].keys()),
         'hidden_dim' : 50,
-        'output_dim' : 1,
+        'output_dim' : config.prediction_frame_size*2,
         'layers' : 1
     }
     

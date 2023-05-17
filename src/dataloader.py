@@ -126,11 +126,11 @@ def load_data(filepath, numeric_cols, error_cols=[]):
 
     return converted_data
 
-def create_dataset(data, target_col, window_size):
+def create_dataset(data, target_col, training_size, prediction_size):
     x, y = [], []
-    for i in range(len(data)-window_size):
-        feature = data[i:i+window_size]
-        target = data[target_col][i+1:i+window_size+1]
+    for i in range(len(data)-(training_size+prediction_size)):
+        feature = data[i:i+training_size]
+        target = data[target_col][i+training_size-prediction_size:i+training_size+prediction_size]
         # Skip windows with any null values.
         if feature.isnull().values.any() or target.isnull().values.any():
             continue
