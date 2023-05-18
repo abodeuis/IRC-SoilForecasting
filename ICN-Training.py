@@ -112,8 +112,8 @@ thresh = round(len(data)*(1-config.validation_percent))
 train_data = data[:thresh]
 val_data = data[thresh:]
 
-train_x, train_y = icn_data.create_dataset(train_data[config.numeric_cols], config.prediction_target, config.training_frame_size, config.prediction_frame_size)
-val_x, val_y = icn_data.create_dataset(val_data[config.numeric_cols], config.prediction_target, config.training_frame_size, config.prediction_frame_size)
+train_x, train_y = icn_data.create_dataset(train_data[config.numeric_cols], config.target_cols, config.training_frame_size, config.prediction_frame_size)
+val_x, val_y = icn_data.create_dataset(val_data[config.numeric_cols], config.target_cols, config.training_frame_size, config.prediction_frame_size)
 
 # Naive Model (Guess last years answer)
 
@@ -196,7 +196,7 @@ torch.save(gru_model, os.path.join(config.save_path, 'models', 'GRU_model.pk'))
 
 # ARIMA (Auto Regressive Integrated Moving Average) model
 # (p,q,d) p is ar q is ma d is the number of differencing required to make the time series stationary
-#arima_model = sm.tsa.ARIMA(train[config.prediction_target], order=(1,1,0)).fit()
+#arima_model = sm.tsa.ARIMA(train[config.target_cols], order=(1,1,0)).fit()
 
 # SARIMA
 
