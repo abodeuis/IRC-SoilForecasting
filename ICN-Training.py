@@ -112,8 +112,8 @@ thresh = round(len(data)*(1-config.validation_percent))
 train_data = data[:thresh]
 val_data = data[thresh:]
 
-train_x, train_y = icn_data.create_dataset(train_data[config.numeric_cols], config.target_cols, config.training_frame_size, config.prediction_frame_size)
-val_x, val_y = icn_data.create_dataset(val_data[config.numeric_cols], config.target_cols, config.training_frame_size, config.prediction_frame_size)
+train_x, train_y = icn_data.create_dataset(train_data[config.numeric_cols], config.target_cols, config.training_win_size, config.prediction_win_size)
+val_x, val_y = icn_data.create_dataset(val_data[config.numeric_cols], config.target_cols, config.training_win_size, config.prediction_win_size)
 
 # Naive Model (Guess last years answer)
 
