@@ -19,9 +19,7 @@ For this project we will be using python 3.6 or greater. You can see if you have
 
 ![Example of using python --version](tutorial_images/pyversion.png)
 
-**Installing Python :** If you don't have python installed you can downloaded the latest GUI installer from [here](https://www.python.org/downloads/).
-![Python downloads page](tutorial_images/pydownload.png)
-You'll then need to run the installer and once it is done you can check it worked by using ```python --version``` again.
+**Installing Python :** If you don't have python installed you can downloaded the latest GUI installer from [here](https://www.python.org/downloads/). You'll then need to run the installer and once it is done you can check it worked by using ```python --version``` again.
 
 **Installing Python Packages** : For the next step you will need to have a terminal window that is in the directory that you downloaded this git repository to. Once we are in that directory we can install the packages we will need for the tutorial with ```pip install -r requirements.txt```. This command will download all of the packages listed in requirements.txt file and may take a short amount of time to do so.
 
