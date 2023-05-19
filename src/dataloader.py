@@ -126,6 +126,18 @@ def load_data(filepath, numeric_cols, error_cols=[]):
 
     return converted_data
 
+def create_lstm_dataset(data, target_col, window_size):
+    x, y = [], []
+    for i in range(len(data)-window_size):
+        feature = data[i:i+window_size]
+        target = data[target_col][i+1:i+window_size+1]
+        # Skip windows with any null values.
+        if feature.isnull().values.any() or target.isnull().values.any():
+            continue
+        x.append(feature.to_numpy())
+        y.append(target.to_numpy()) 
+    return torch.tensor(x), torch.tensor(y)
+
 def create_dataset(data, target_col, training_size, prediction_size):
     x, y = [], []
     for i in range(len(data)-(training_size+prediction_size)):

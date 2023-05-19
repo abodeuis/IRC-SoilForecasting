@@ -112,18 +112,20 @@ thresh = round(len(data)*(1-config.validation_percent))
 train_data = data[:thresh]
 val_data = data[thresh:]
 
-train_x, train_y = icn_data.create_dataset(train_data[config.numeric_cols], config.target_cols, config.training_win_size, config.prediction_win_size)
-val_x, val_y = icn_data.create_dataset(val_data[config.numeric_cols], config.target_cols, config.training_win_size, config.prediction_win_size)
-
-# Naive Model (Guess last years answer)
-
-# linear regression
-
-# Data Prep for NN
+# Series data
+train_x, train_y = icn_data.create_lstm_dataset(train_data[config.numeric_cols], config.target_cols, config.training_win_size)
+val_x, val_y = icn_data.create_lstm_dataset(val_data[config.numeric_cols], config.target_cols, config.training_win_size)
 train_loader = torch_data.DataLoader(torch_data.TensorDataset(train_x, train_y), shuffle=True, batch_size=config.batch_size)
 val_loader = torch_data.DataLoader(torch_data.TensorDataset(val_x, val_y), shuffle=True, batch_size=config.validation_batchs)
+
+# Flattened data 
+train_x, train_y = icn_data.create_dataset(train_data[config.numeric_cols], config.target_cols, config.training_win_size, config.prediction_win_size)
+val_x, val_y = icn_data.create_dataset(val_data[config.numeric_cols], config.target_cols, config.training_win_size, config.prediction_win_size)
 dense_train_loader = torch_data.DataLoader(torch_data.TensorDataset(torch.flatten(train_x, start_dim=1), train_y), shuffle=True, batch_size=config.batch_size)
 dense_val_loader = torch_data.DataLoader(torch_data.TensorDataset(torch.flatten(val_x, start_dim=1), val_y), shuffle=True, batch_size=config.batch_size)
+
+
+# Data Prep for NN
 input_shape=len(train_data[config.numeric_cols].keys())
 model_params = {
     'input_dim' : len(train_data[config.numeric_cols].keys()),
