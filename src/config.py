@@ -12,15 +12,17 @@ class Config:
     class Default:
         # [Data]
         data_source = ''
-        prediction_target = 'avg_soiltemp_4in_sod' # Name of the column that we are going to try to predict
+        target_cols = 'avg_soiltemp_4in_sod' # Name of the column that we are going to try to predict
         validation_percent = 0.2 # Percentage of training set to use as validation
         numeric_cols = ['year', 'month', 'day', 'max_wind_gust', 'avg_wind_speed', 'avg_wind_dir', 'sol_rad', 'max_air_temp', 'min_air_temp', 'avg_air_temp', 'max_rel_hum', 'min_rel_hum', 'avg_rel_hum', 'avg_dewpt_temp', 'precip', 'pot_evapot', 'max_soiltemp_4in_sod', 'min_soiltemp_4in_sod', 'avg_soiltemp_4in_sod', 'max_soiltemp_8in_sod', 'min_soiltemp_8in_sod', 'avg_soiltemp_8in_sod', 'max_soiltemp_4in_bare', 'min_soiltemp_4in_bare', 'avg_soiltemp_4in_bare', 'max_soiltemp_2in_bare', 'min_soiltemp_2in_bare', 'avg_soiltemp_2in_bare', 'SM5', 'SM10', 'SM20', 'SM50', 'SM100', 'SM150']
         error_cols = ['xwser', 'awser', 'awder', 'soler', 'xater', 'nater', 'aater', 'xrher', 'nrher', 'arher', 'adper', 'pcer', 'pevaper', 'xst4soder', 'nst4soder', 'ast4soder', 'xst8soder', 'nst8soder', 'ast8soder', 'xst4bareer', 'nst4bareer', 'ast4bareer', 'xst2bareer', 'nst2bareer', 'ast2bareer']
 
         # [Training]
-        epochs = 5          # Number of training epochs
+        training_win_size = 14    # Number of time steps to use for each training step window
+        prediction_win_size = 7   # Number of time steps to predict out.
+        epochs = 50          # Number of training epochs
         batch_size = 32     # Number of individual samples to use for each training step.
-        early_stopping = 3  # Early stopping, will stop training if no improvement in 'N' epochs
+        early_stopping = 5  # Early stopping, will stop training if no improvement in 'N' epochs
         validation_batchs = 3 # Number of batchs to use per training step as validation
         learning_rate = 1e-3 # learning rate
 
@@ -41,7 +43,7 @@ class Config:
                        "# The directory or files to load the data from\n" +
                        "data_source = \n"
                        "# Name of the column that is going to be predicted\n" +
-                       "prediction_target = \'{}\'\n".format(Config.Default.prediction_target) +
+                       "target_cols = \'{}\'\n".format(Config.Default.target_cols) +
                        "# Percentage of the data to use for validation\n" +
                        "validation_percent = {}\n".format(Config.Default.validation_percent) +
                        "# The columns that will be used for analysis\n" +
@@ -50,6 +52,10 @@ class Config:
                        "error_cols = {}\n".format(Config.Default.error_cols) +
                        "\n" +
                        "[Training]\n" +
+                       "# Number of time steps to use for each training step window\n" +
+                       "training_win_size = {}\n".format(Config.Default.training_win_size) +
+                       "# Number of time steps to predict out.\n" +
+                       "prediction_win_size = {}\n".format(Config.Default.prediction_win_size) +
                        "# Number of epochs to train for.\n" +
                        "epochs = {}\n".format(Config.Default.epochs) +
                        "batch_size = {}\n".format(Config.Default.batch_size) +
@@ -91,12 +97,14 @@ class Config:
 
         # [Data]
         self.data_source = config.get('Data','data_source', fallback=Config.Default.data_source)
-        self.prediction_target = config.get('Data','prediction_target', fallback=Config.Default.prediction_target)
+        self.target_cols = config.get('Data','target_cols', fallback=Config.Default.target_cols)
         self.validation_percent = config.get('Data','validation_percent', fallback=Config.Default.validation_percent)
         self.numeric_cols = config.get('Data','numeric_cols', fallback=Config.Default.numeric_cols)
         self.error_cols = config.get('Data', 'error_cols', fallback=Config.Default.error_cols)
 
         # [Training]
+        self.training_win_size = config.get('Training','training_win_size', fallback=Config.Default.training_win_size)
+        self.prediction_win_size = config.get('Training','prediction_win_size', fallback=Config.Default.prediction_win_size)
         self.epochs = config.get('Training','epochs', fallback=Config.Default.epochs)
         self.batch_size = config.get('Training','batch_size', fallback=Config.Default.batch_size)
         self.early_stopping = config.get('Training','early_stopping', fallback=Config.Default.early_stopping)
@@ -133,7 +141,7 @@ class Config:
         self.error_cols = trim_quotes(self.error_cols)
         
         # Trim quotes from string values
-        self.prediction_target = self.prediction_target.replace('\'', '').replace('"', '')
+        self.target_cols = self.target_cols.replace('\'', '').replace('"', '')
         self.save_path = self.save_path.replace('\'', '').replace('"', '')
         if self.save_path == '':
             self.save_path = Config.Default.save_path
@@ -141,6 +149,8 @@ class Config:
         # Convert strings to numeric values
         self.validation_percent = float(self.validation_percent)
 
+        self.training_win_size = int(self.training_win_size)
+        self.prediction_win_size = int(self.prediction_win_size)
         self.epochs = int(self.epochs)
         self.batch_size = int(self.batch_size)
         self.early_stopping = int(self.early_stopping)
@@ -172,7 +182,7 @@ class TrainedConfig:
         training_data_source = ''
         training_start_date = datetime(1900,1,1)
         training_end_date = datetime(2100,1,1)
-        prediction_target = 'avg_soiltemp_4in_sod' # Name of the column that we are going to try to predict
+        target_cols = 'avg_soiltemp_4in_sod' # Name of the column that we are going to try to predict
         numeric_cols = ['year', 'month', 'day', 'max_wind_gust', 'avg_wind_speed', 'avg_wind_dir', 'sol_rad', 'max_air_temp', 'min_air_temp', 'avg_air_temp', 'max_rel_hum', 'min_rel_hum', 'avg_rel_hum', 'avg_dewpt_temp', 'precip', 'pot_evapot', 'max_soiltemp_4in_sod', 'min_soiltemp_4in_sod', 'avg_soiltemp_4in_sod', 'max_soiltemp_8in_sod', 'min_soiltemp_8in_sod', 'avg_soiltemp_8in_sod', 'max_soiltemp_4in_bare', 'min_soiltemp_4in_bare', 'avg_soiltemp_4in_bare', 'max_soiltemp_2in_bare', 'min_soiltemp_2in_bare', 'avg_soiltemp_2in_bare', 'SM5', 'SM10', 'SM20', 'SM50', 'SM100', 'SM150']
         error_cols = ['xwser', 'awser', 'awder', 'soler', 'xater', 'nater', 'aater', 'xrher', 'nrher', 'arher', 'adper', 'pcer', 'pevaper', 'xst4soder', 'nst4soder', 'ast4soder', 'xst8soder', 'nst8soder', 'ast8soder', 'xst4bareer', 'nst4bareer', 'ast4bareer', 'xst2bareer', 'nst2bareer', 'ast2bareer']
 
@@ -204,7 +214,7 @@ class TrainedConfig:
 
         # [Data]
         self.data_source = config.get('Data','data_source', fallback=Config.Default.data_source)
-        self.prediction_target = config.get('Data','prediction_target', fallback=Config.Default.prediction_target)
+        self.target_cols = config.get('Data','target_cols', fallback=Config.Default.target_cols)
         self.validation_percent = config.get('Data','validation_percent', fallback=Config.Default.validation_percent)
         self.numeric_cols = config.get('Data','numeric_cols', fallback=Config.Default.numeric_cols)
         self.error_cols = config.get('Data', 'error_cols', fallback=Config.Default.error_cols)
@@ -246,7 +256,7 @@ class TrainedConfig:
         self.error_cols = trim_quotes(self.error_cols)
         
         # Trim quotes from string values
-        self.prediction_target = self.prediction_target.replace('\'', '').replace('"', '')
+        self.target_cols = self.target_cols.replace('\'', '').replace('"', '')
         self.save_path = self.save_path.replace('\'', '').replace('"', '')
         
         # Convert strings to numeric values
