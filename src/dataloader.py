@@ -1,5 +1,6 @@
 import os
 import logging
+import numpy as np
 import pandas as pd
 from datetime import datetime
 from tqdm import tqdm
@@ -126,15 +127,16 @@ def load_data(filepath, numeric_cols, error_cols=[]):
 
     return converted_data
 
-def create_lstm_dataset(data, target_col, window_size):
+def create_lstm_dataset(data, target_col, window_size, prediction_size):
     x, y = [], []
-    for i in range(len(data)-window_size):
+    for i in range(len(data)-(window_size+prediction_size)):
         feature = data[i:i+window_size]
-        target = data[target_col][i+1:i+window_size+1]
+        feature = pd.concat([feature,pd.DataFrame([[-999]*feature.shape[1]]*prediction_size,columns=feature.columns)], ignore_index=True)
+        target = data[target_col][i+1+window_size:i+1+window_size+prediction_size]
         # Skip windows with any null values.
         if feature.isnull().values.any() or target.isnull().values.any():
             continue
-        x.append(feature.to_numpy())
+        x.append(feature.astype('float32').to_numpy())
         y.append(target.to_numpy()) 
     return torch.tensor(x), torch.tensor(y)
 
